@@ -56,19 +56,19 @@ command_configuration = DiscordCommand(
             type=CommandTypes.STRING),
         CommandOption(
             name="tempo",
-            description="quanto tempo vai durar",
+            description="quanto tempo vai durar?",
             required=True,
             type=CommandTypes.STRING),
         CommandOption(
             name="motivo",
-            description="quanto tempo vai durar",
-            required=False,
+            description="então me diga, qual o motivo desse timeout?",
+            required=True,
             type=CommandTypes.STRING)]
 )
 
 
 @bot.interaction.on("timeout")
-async def handle_command(ctx: IncomingDiscordInteraction, username: str, tempo: str, motivo) -> DiscordResponse:
+async def handle_command(ctx: IncomingDiscordInteraction, username: str, tempo: str, **kwargs) -> DiscordResponse:
 
     try:
         time = ShortTime(tempo)
@@ -82,13 +82,14 @@ async def handle_command(ctx: IncomingDiscordInteraction, username: str, tempo: 
     if to:
         end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
         return DiscordResponse(
-            content=f"{username} já está calado e voltará a falar dia {end_time}.\n"
+            content=f"{username} já recebeu um cala boca de {to.moderator} com o motivo \"{to.reason}\" e voltará a falar dia {end_time}.\n"
             "Atualmente não fui programado para lidar com alteração de tempo de sentenças ativas.\n"
             "Caso realmente deseje alterar, peço que solicite o revoke do timeout e crie um novo.",
             empherical=False,
         )
 
-    to = Timeout(db=db, moderator={ctx.member.user.username}, username=username, finish_at=time.dt, reason=motivo)
+    reason = kwargs.get('motivo')
+    to = Timeout(db=db, moderator={ctx.member.user.username}, username=username, finish_at=time.dt, reason=reason)
 
     await bot_client.get_channel("mitsuaky").send(to.timeout_command)
     # await bot_client.get_channel("mitsuaky").send(f"Ei, {username}, fique calado por {tempo} minutos por favor.")

@@ -1,5 +1,6 @@
 from datetime import datetime
 from models.db import DataBase
+from typing import Union
 
 # seconds
 MAX_TIMEOUT_TIME = 1209600
@@ -7,7 +8,7 @@ MAX_TIMEOUT_TIME = 1209600
 
 class Timeout():
 
-    def __init__(self, db: DataBase, moderator: str, username: str, finish_at: datetime, reason: str):
+    def __init__(self, db: DataBase, moderator: str, username: str, finish_at: datetime, reason: Union[str, None]):
         self._id = None
         self.db = db
         self.username = username.lower()
