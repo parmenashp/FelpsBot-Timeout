@@ -8,14 +8,13 @@ import twitchio
 import uvicorn
 from dispike import Dispike
 from dispike.models import IncomingDiscordInteraction
-from dispike.register.models import DiscordCommand
-from dispike.register.models.options import CommandOption, CommandTypes
 from dispike.response import DiscordResponse
 
 import keys
 from models.db import DataBase
 from models.timeout import Timeout
 from utils.time import ShortTime, BadArgument
+from models.commands import commands
 
 humanize.i18n.activate("pt_BR")
 
@@ -45,26 +44,6 @@ message_erros = {
 
 to_result_msg = None
 to_result_tag = None
-
-command_configuration = DiscordCommand(
-    name="timeout", description="Dê timeout nos foras da lei!",
-    options=[
-        CommandOption(
-            name="username",
-            description="a pessoa que vai receber o CALA BOCA PUTA",
-            required=True,
-            type=CommandTypes.STRING),
-        CommandOption(
-            name="tempo",
-            description="quanto tempo vai durar?",
-            required=True,
-            type=CommandTypes.STRING),
-        CommandOption(
-            name="motivo",
-            description="então me diga, qual o motivo desse timeout?",
-            required=True,
-            type=CommandTypes.STRING)]
-)
 
 
 @bot.interaction.on("timeout")
@@ -146,7 +125,8 @@ async def event_raw_data(data):
 event_lock = asyncio.Event()
 
 server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
-bot.register(command=command_configuration, guild_only=True, guild_to_target=296214474791190529)
+for command in commands:
+    bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
 
 loop = asyncio.get_event_loop()
 loop.create_task(bot_client.connect())
