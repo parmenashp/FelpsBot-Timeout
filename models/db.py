@@ -2,12 +2,17 @@ from motor.motor_asyncio import AsyncIOMotorCollection
 from datetime import datetime
 from typing import List, Union, TYPE_CHECKING, Type
 from models.timeout import Timeout
+from pymongo.results import InsertOneResult
 
 
 class DataBase():
 
     def __init__(self, collection: AsyncIOMotorCollection):
         self.collection = collection
+
+    async def insert_timeout(self, timeout: dict) -> Type["InsertOneResult"]:
+
+        return await self.collection.insert_one(timeout)
 
     async def get_active_timeouts(self) -> Union[None, List[Timeout]]:
         """Retorna uma lista de `Timeout` com todos os timeouts ativos.

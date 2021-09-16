@@ -75,8 +75,9 @@ class Timeout():
         """Enfia no banco de dados"""
         if self._id:
             return False
-        result = await self.db.insert_one(self._to_document())
+        result = await self.db.insert_timeout(self._to_document())
         self._id = result.inserted_id
+        return result
 
     @property
     def next_timeout_time(self):

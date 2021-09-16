@@ -77,6 +77,7 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
         if to_result_tag == "timeout_success":
             natural = humanize.naturaldelta(time.dt)
             end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
+            await to.insert()
             return DiscordResponse(
                 content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",
                 empherical=False,
@@ -152,8 +153,8 @@ if __name__ == "__main__":
     event_lock = asyncio.Event()
 
     server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
-    for command in commands:
-        bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
+    # for command in commands:
+    #     bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
 
     loop = asyncio.get_event_loop()
     loop.create_task(bot_client.connect())
