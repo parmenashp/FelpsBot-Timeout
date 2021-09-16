@@ -28,19 +28,19 @@ class Timeout():
         """Constrói (e retorna) uma classe com os dados 
         providos pelo banco de dados (pymongo/motor)"""
         # Cria um novo objeto sem chamar o __init__
-        cls.__new__(cls)
-        cls.db = db
-        cls._id = data["_id"]
-        cls.username = data["username"]
-        cls.moderator = data["moderator"]
-        cls.reason = data["reason"]
-        cls.created_at = data["created_at"]
-        cls.last_timeout = data["last_timeout"]
-        cls.finish_at = data["finish_at"]
-        cls.revoke_reason = data["revoke_reason"]
-        cls.revoked = data["revoked"]
-        cls.revoker = data["revoker"]
-        return cls
+        self = cls.__new__(cls)
+        self.db = db
+        self._id = data["_id"]
+        self.username = data["username"]
+        self.moderator = data["moderator"]
+        self.reason = data["reason"]
+        self.created_at = data["created_at"]
+        self.last_timeout = data["last_timeout"]
+        self.finish_at = data["finish_at"]
+        self.revoke_reason = data["revoke_reason"]
+        self.revoked = data["revoked"]
+        self.revoker = data["revoker"]
+        return self
 
     def _to_document(self):
         document = {

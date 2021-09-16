@@ -10,9 +10,8 @@ class DataBase():
     def __init__(self, collection: AsyncIOMotorCollection):
         self.collection = collection
 
-    async def insert_timeout(self, timeout: dict) -> Type["InsertOneResult"]:
-
-        return await self.collection.insert_one(timeout)
+    async def insert_timeout(self, timeout: Type["Timeout"]) -> Type["InsertOneResult"]:
+        return await self.collection.insert_one(timeout._to_document())
 
     async def get_active_timeouts(self) -> Union[None, List[Timeout]]:
         """Retorna uma lista de `Timeout` com todos os timeouts ativos.
