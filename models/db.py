@@ -1,7 +1,7 @@
 from motor.motor_asyncio import AsyncIOMotorCollection
 from datetime import datetime
+from typing import List, Union, TYPE_CHECKING, Type
 from models.timeout import Timeout
-from typing import List, Union
 
 
 class DataBase():
@@ -23,16 +23,16 @@ class DataBase():
 
         return result if result else None
 
-    async def revoke_timeout(self, timeout: Timeout):
+    async def revoke_timeout(self, timeout: Type["Timeout"]):
         """Envia um revoke de `Timeout` para o banco de dados"""
         update = {
             "revoke_reason": timeout.revoke_reason,
             "revoked": timeout.revoked,
             "revoker": timeout.revoker
         }
-        await self.collection.update_one(timeout._id, update)
+        return await self.collection.update_one(timeout._id, update)
 
-    async def get_user_timeouts(self, username: str, limit=None) -> Union[None, List[Timeout]]:
+    async def get_user_timeouts(self, username: str, limit=None) -> Union[None, List["Timeout"]]:
         """Retorna a lista de `Timeout` com todos os timeouts recebidos por esse usuário, incluindo os ativos.
         Se não encontrar, retorna `None`"""
         query = {
@@ -45,7 +45,7 @@ class DataBase():
 
         return result if result else None
 
-    async def get_active_user_timeout(self, username: str) -> Union[None, Timeout]:
+    async def get_active_user_timeout(self, username: str) -> Union[None, "Timeout"]:
         """Retorna o `Timeout` ativo desse usuário. Se não encontrar, retorna `None`"""
         query = {
             "username": username.lower(),

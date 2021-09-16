@@ -1,6 +1,8 @@
 from datetime import datetime
-from models.db import DataBase
-from typing import Union
+from typing import Union, TYPE_CHECKING, Type
+
+if TYPE_CHECKING:
+    from models.db import DataBase
 
 # seconds
 MAX_TIMEOUT_TIME = 1209600
@@ -8,7 +10,7 @@ MAX_TIMEOUT_TIME = 1209600
 
 class Timeout():
 
-    def __init__(self, db: DataBase, moderator: str, username: str, finish_at: datetime, reason: Union[str, None]):
+    def __init__(self, db: Type["DataBase"], moderator: str, username: str, finish_at: datetime, reason: Union[str, None]):
         self._id = None
         self.db = db
         self.username = username.lower()
@@ -22,7 +24,7 @@ class Timeout():
         self.revoker = None
 
     @classmethod
-    def from_database(cls, db: DataBase, data):
+    def from_database(cls, db: Type["DataBase"], data):
         """Constrói (e retorna) uma classe com os dados 
         providos pelo banco de dados (pymongo/motor)"""
         # Cria um novo objeto sem chamar o __init__
@@ -61,7 +63,7 @@ class Timeout():
         self.revoker = revoker.lower()
         self.reason = reason
         self.revoked = datetime.now()
-        await self.db.revoke_timeout(self)
+        return await self.db.revoke_timeout(self)
 
     async def update_last_timeout(self):
         """Atualiza o registro do último timeout realizado para esse caso"""
