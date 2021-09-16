@@ -1,6 +1,6 @@
 from motor.motor_asyncio import AsyncIOMotorCollection
 from datetime import datetime
-from typing import List, Union, TYPE_CHECKING, Type
+from typing import List, Union, Type
 from models.timeout import Timeout
 from pymongo.results import InsertOneResult
 
@@ -30,11 +30,15 @@ class DataBase():
     async def revoke_timeout(self, timeout: Type["Timeout"]):
         """Envia um revoke de `Timeout` para o banco de dados"""
         update = {
-            "revoke_reason": timeout.revoke_reason,
-            "revoked": timeout.revoked,
-            "revoker": timeout.revoker
+            "$set": {
+                "revoked_at": timeout.revoked_at,
+                "revoke_reason": timeout.revoke_reason,
+                "revoked": timeout.revoked,
+                "revoker": timeout.revoker
+            }
         }
-        return await self.collection.update_one(timeout._id, update)
+        _id = {"_id": timeout._id}
+        return await self.collection.update_one(_id, update)
 
     async def get_user_timeouts(self, username: str, limit=None) -> Union[None, List["Timeout"]]:
         """Retorna a lista de `Timeout` com todos os timeouts recebidos por esse usuário, incluindo os ativos.

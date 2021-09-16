@@ -19,9 +19,10 @@ class Timeout():
         self.created_at = datetime.utcnow()
         self.last_timeout = None
         self.finish_at = finish_at
+        self.revoker = None
+        self.revoked_at = None
         self.revoke_reason = None
         self.revoked = False
-        self.revoker = None
 
     @classmethod
     def from_database(cls, db: Type["DataBase"], data):
@@ -37,9 +38,10 @@ class Timeout():
         self.created_at = data["created_at"]
         self.last_timeout = data["last_timeout"]
         self.finish_at = data["finish_at"]
+        self.revoked_at = data["revoked_at"]
+        self.revoker = data["revoker"]
         self.revoke_reason = data["revoke_reason"]
         self.revoked = data["revoked"]
-        self.revoker = data["revoker"]
         return self
 
     def _to_document(self):
@@ -50,9 +52,10 @@ class Timeout():
             "created_at": self.created_at,
             "last_timeout": self.last_timeout,
             "finish_at": self.finish_at,
+            "revoked_at": self.revoked_at,
+            "revoker": self.revoker,
             "revoke_reason": self.revoke_reason,
-            "revoked": self.revoked,
-            "revoker": self.revoker
+            "revoked": self.revoked
         }
         return document
 
@@ -61,8 +64,9 @@ class Timeout():
         if not self._id:
             return False
         self.revoker = revoker.lower()
-        self.reason = reason
-        self.revoked = datetime.now()
+        self.revoke_reason = reason
+        self.revoked_at = datetime.now()
+        self.revoked = True
         return await self.db.revoke_timeout(self)
 
     async def update_last_timeout(self):
