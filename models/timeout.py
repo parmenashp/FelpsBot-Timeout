@@ -90,4 +90,4 @@ class Timeout():
 
     @property
     def timeout_command(self):
-        return f"/timeout {self.username} {self.next_timeout_time}s"
+        return f"/timeout {self.username} {self.next_timeout_time} s"
