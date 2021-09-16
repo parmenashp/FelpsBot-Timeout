@@ -75,7 +75,7 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
         await event_lock.wait()
 
         if to_result_tag == "timeout_success":
-            natural = humanize.naturaldelta(timedelta(minutes=time.td))
+            natural = humanize.naturaldelta(time.dt)
             end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
             return DiscordResponse(
                 content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",

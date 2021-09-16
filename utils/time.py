@@ -1,7 +1,6 @@
 import datetime
 from dateutil.relativedelta import relativedelta
 import re
-from pprint import pprint
 
 
 class BadArgument(Exception):
@@ -26,5 +25,5 @@ class ShortTime:
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}
         now = now or datetime.datetime.now()
-        self.td: datetime.timedelta = relativedelta(**data)
+        self.td = relativedelta(**data)
         self.dt: datetime.datetime = now + self.td
