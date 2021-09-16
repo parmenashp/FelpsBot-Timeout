@@ -81,7 +81,7 @@ class Timeout():
     @property
     def next_timeout_time(self):
         """Retorna o total de segundos para o próximo timeout"""
-        now = datetime.utcnow()
+        now = datetime.now()
         delta = (self.finish_at - now).total_seconds()
         # Tirando precisão decimal
         delta = int(delta)

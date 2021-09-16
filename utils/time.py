@@ -25,6 +25,6 @@ class ShortTime:
             raise BadArgument("a data fornecida é inválida")
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}
-        now = now or datetime.datetime.now(datetime.timezone.utc)
+        now = now or datetime.datetime.now()
         self.td: datetime.timedelta = relativedelta(**data)
         self.dt: datetime.datetime = now + self.td

@@ -67,7 +67,7 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
                 "Caso realmente deseje alterar, peço que solicite o revoke do timeout e crie um novo.", empherical=False,)
 
         reason = kwargs.get('motivo')
-        to = Timeout(db=db, moderator={ctx.member.user.username}, username=username, finish_at=time.dt, reason=reason)
+        to = Timeout(db=db, moderator=ctx.member.user.username, username=username, finish_at=time.dt, reason=reason)
 
         await bot_client.get_channel("mitsuaky").send(to.timeout_command)
         # await bot_client.get_channel("mitsuaky").send(f"Ei, {username}, fique calado por {tempo} minutos por favor.")
