@@ -5,6 +5,7 @@ from datetime import timedelta
 import humanize
 import motor.motor_asyncio
 import twitchio
+import pymongo
 import uvicorn
 from dispike import Dispike
 from dispike.models import IncomingDiscordInteraction
@@ -47,49 +48,73 @@ to_result_tag = None
 
 
 @bot.interaction.on("timeout")
-async def handle_command(ctx: IncomingDiscordInteraction, username: str, tempo: str, **kwargs) -> DiscordResponse:
-
+async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: str, **kwargs) -> DiscordResponse:
     try:
-        time = ShortTime(tempo)
-    except BadArgument:
+        try:
+            time = ShortTime(tempo)
+        except BadArgument:
+            return DiscordResponse(
+                content=f"O tempo informado é inválido. ({tempo})",
+                empherical=False,
+            )
+
+        to = await db.get_active_user_timeout(username)
+        if to:
+            end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
+            return DiscordResponse(
+                content=f"{username} já recebeu um cala boca de {to.moderator} com o motivo \"{to.reason}\" e voltará a falar dia {end_time}.\n"
+                "Atualmente não fui programado para lidar com alteração de tempo de sentenças ativas.\n"
+                "Caso realmente deseje alterar, peço que solicite o revoke do timeout e crie um novo.", empherical=False,)
+
+        reason = kwargs.get('motivo')
+        to = Timeout(db=db, moderator={ctx.member.user.username}, username=username, finish_at=time.dt, reason=reason)
+
+        await bot_client.get_channel("mitsuaky").send(to.timeout_command)
+        # await bot_client.get_channel("mitsuaky").send(f"Ei, {username}, fique calado por {tempo} minutos por favor.")
+        event_lock.clear()
+        await event_lock.wait()
+
+        if to_result_tag == "timeout_success":
+            natural = humanize.naturaldelta(timedelta(minutes=time.td))
+            end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
+            return DiscordResponse(
+                content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",
+                empherical=False,
+            )
+        elif to_result_tag in message_erros:
+            return DiscordResponse(
+                content=message_erros[to_result_tag],
+                empherical=False,
+            )
+        else:
+            return DiscordResponse(
+                content=f"Eu tentei realizar meu trabalho mas eu recebi essa mensagem aí da twitch: {to_result_msg}",
+                empherical=False,
+            )
+    except pymongo.errors.OperationFailure as e:
         return DiscordResponse(
-            content=f"O tempo informado é inválido. ({tempo})",
+            content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
             empherical=False,
         )
 
-    to = await db.get_active_user_timeout(username)
-    if to:
-        end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
+
+@bot.interaction.on("untimeout")
+async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motivo: str, **kwargs) -> DiscordResponse:
+    try:
+        to = await db.get_active_user_timeout(username)
+        if not to:
+            return DiscordResponse(
+                content=f"O usuário {username} não tem nenhum timeout ativo.",
+                empherical=False,
+            )
+        await to.revoke(revoker=ctx.member.user.username, reason=motivo)
         return DiscordResponse(
-            content=f"{username} já recebeu um cala boca de {to.moderator} com o motivo \"{to.reason}\" e voltará a falar dia {end_time}.\n"
-            "Atualmente não fui programado para lidar com alteração de tempo de sentenças ativas.\n"
-            "Caso realmente deseje alterar, peço que solicite o revoke do timeout e crie um novo.",
+            content=f"O timeout do usuário {username} foi removido com sucesso!",
             empherical=False,
         )
-
-    reason = kwargs.get('motivo')
-    to = Timeout(db=db, moderator={ctx.member.user.username}, username=username, finish_at=time.dt, reason=reason)
-
-    await bot_client.get_channel("mitsuaky").send(to.timeout_command)
-    # await bot_client.get_channel("mitsuaky").send(f"Ei, {username}, fique calado por {tempo} minutos por favor.")
-    event_lock.clear()
-    await event_lock.wait()
-
-    if to_result_tag == "timeout_success":
-        natural = humanize.naturaldelta(timedelta(minutes=time.td))
-        end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
+    except pymongo.errors.OperationFailure as e:
         return DiscordResponse(
-            content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",
-            empherical=False,
-        )
-    elif to_result_tag in message_erros:
-        return DiscordResponse(
-            content=message_erros[to_result_tag],
-            empherical=False,
-        )
-    else:
-        return DiscordResponse(
-            content=f"Eu tentei realizar meu trabalho mas eu recebi essa mensagem aí da twitch: {to_result_msg}",
+            content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
             empherical=False,
         )
 
@@ -122,12 +147,14 @@ async def event_raw_data(data):
         to_result_msg = " ".join(groups[4:]).lstrip(":")
         event_lock.set()
 
-event_lock = asyncio.Event()
 
-server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
-for command in commands:
-    bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
+if __name__ == "__main__":
+    event_lock = asyncio.Event()
 
-loop = asyncio.get_event_loop()
-loop.create_task(bot_client.connect())
-loop.run_until_complete(server.serve())
+    server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
+    for command in commands:
+        bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
+
+    loop = asyncio.get_event_loop()
+    loop.create_task(bot_client.connect())
+    loop.run_until_complete(server.serve())
