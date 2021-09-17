@@ -18,7 +18,7 @@ command_timeout = DiscordCommand(
         CommandOption(
             name="motivo",
             description="então me diga, qual o motivo desse timeout?",
-            required=False,
+            required=True,
             type=CommandTypes.STRING)
     ]
 )
@@ -34,7 +34,7 @@ command_untimeout = DiscordCommand(
         CommandOption(
             name="motivo",
             description="cá entre nós, qual o motivo dessa libertação?",
-            required=False,
+            required=True,
             type=CommandTypes.STRING)
     ]
 )
