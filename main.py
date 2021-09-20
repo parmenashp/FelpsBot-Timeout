@@ -1,6 +1,7 @@
 
 import asyncio
 from datetime import timedelta
+from models.embeds import LookupResponse
 
 import humanize
 import motor.motor_asyncio
@@ -113,6 +114,20 @@ async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motiv
             content=f"O timeout do usuário {username} foi removido com sucesso!",
             empherical=False,
         )
+    except pymongo.errors.OperationFailure as e:
+        return DiscordResponse(
+            content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
+            empherical=False,
+        )
+
+
+@bot.interaction.on("lookup")
+async def handle_lookup(ctx: IncomingDiscordInteraction, username: str) -> DiscordResponse:
+    try:
+        username = username.lower()
+        tos = await db.get_user_timeouts(username)
+        return LookupResponse(username, tos)
+
     except pymongo.errors.OperationFailure as e:
         return DiscordResponse(
             content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
