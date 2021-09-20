@@ -3,6 +3,11 @@ from dateutil.relativedelta import relativedelta
 import re
 
 
+def friendly_time(datetime: datetime.datetime) -> str:
+    """Retorna o tempo no formato \"dd/mm/yyyy ás hh/mm/ss\""""
+    return datetime.strftime("%d/%m/%Y ás %H:%M:%S")
+
+
 class BadArgument(Exception):
     pass
 
