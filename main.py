@@ -1,7 +1,7 @@
 
 import asyncio
 from datetime import timedelta
-from timer import TimeoutTimer
+from models.timer import TimeoutTimer
 from models.embeds import LookupResponse
 
 import humanize
