@@ -100,7 +100,6 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
 
         try:
             await give_timeout(to)
-            await timer.unlock_timer()
         except TimeoutError as e:
             return DiscordResponse(
                 content=e.message,
@@ -110,6 +109,7 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
         natural = humanize.naturaldelta(time.dt)
         end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
         await to.insert()
+        await timer.unlock_timer()
         #TODO: Log
         return DiscordResponse(
             content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",
