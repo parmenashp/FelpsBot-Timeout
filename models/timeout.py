@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Union, TYPE_CHECKING, Type
 
 if TYPE_CHECKING:
@@ -84,7 +84,7 @@ class Timeout():
         return result
 
     @property
-    def next_timeout_time(self):
+    def next_timeout_seconds(self):
         """Retorna o total de segundos para o próximo timeout"""
         now = datetime.now()
         delta = (self.finish_at - now).total_seconds()
@@ -94,5 +94,10 @@ class Timeout():
         return MAX_TIMEOUT_TIME if delta > MAX_TIMEOUT_TIME else delta
 
     @property
+    def next_timeout_time(self):
+        """Retorna o datetime para o próximo timeout"""
+        return self.last_timeout + timedelta(seconds=self.next_timeout_seconds)
+
+    @property
     def timeout_command(self):
-        return f"/timeout {self.username} {self.next_timeout_time} s"
+        return f"/timeout {self.username} {self.next_timeout_seconds} s"

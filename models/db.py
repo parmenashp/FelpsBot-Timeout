@@ -1,6 +1,7 @@
+import asyncio
 from motor.motor_asyncio import AsyncIOMotorCollection
-from datetime import datetime
-from typing import List, Union, Type
+from datetime import datetime, timedelta
+from typing import List, Optional, Union, Type
 from models.timeout import Timeout
 from pymongo.results import InsertOneResult
 
@@ -26,6 +27,17 @@ class DataBase():
             result.append(Timeout.from_database(self, timeout))
 
         return result if result else None
+
+    async def get_next_active_timeout(self):
+        query = {
+            "finish_at": {"$gte": datetime.now()},
+            "revoked": False
+        }
+        cursor = self.collection.find(query).sort("last_timeout", 1)
+        for timeout in await cursor.to_list(1):
+            return Timeout.from_database(self, timeout)
+
+        return None
 
     async def revoke_timeout(self, timeout: Type["Timeout"]):
         """Envia um revoke de `Timeout` para o banco de dados"""
