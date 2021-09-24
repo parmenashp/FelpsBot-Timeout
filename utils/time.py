@@ -8,6 +8,11 @@ def friendly_time(datetime: datetime.datetime) -> str:
     return datetime.strftime("%d/%m/%Y ás %H:%M:%S")
 
 
+def discord_time(datetime: datetime.datetime, styles: str = None) -> str:
+    """Retorna o tempo no formato renderizado para o discord"""
+    return f"<t:{int(datetime.timestamp())}{f':{styles}' if styles else ''}>"
+
+
 class BadArgument(Exception):
     pass
 
