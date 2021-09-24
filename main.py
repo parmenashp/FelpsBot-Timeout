@@ -40,24 +40,48 @@ client = motor.motor_asyncio.AsyncIOMotorClient(
 db = DataBase(client.felpsBot.timeout)
 
 
-message_erros = {
+timeout_erros = {
     "bad_timeout_mod": "Você não pode dar Timeout em outro moderador.",
     "bad_timeout_self": "Você não pode me fazer dar Timeout em mim mesmo! Vou contar pra o Mitsuaky, tá? 😭",
     "bad_timeout_broadcaster": "Oh, @<139187739248689152>, tavam querendo te dar Timeout, vai deixar? Se fosse eu, não pagaria o salário."
+}
+
+untimeout_erros = {
+    "untimeout_banned": "Esse usuário está banido permanentemente, não consigo remover o timeout"
 }
 
 to_result_msg = None
 to_result_tag = None
 
 
-class TimeoutError(Exception):
+class UntimeoutError(Exception):
     def __init__(self, msg_id, message):
         self.msg_id = msg_id
-        if msg_id in message_erros:
-            self.message = message_erros[to_result_tag]
+        if msg_id in untimeout_erros:
+            self.message = untimeout_erros[to_result_tag]
         else:
             self.message = f"Eu tentei realizar meu trabalho mas eu recebi essa mensagem aí da twitch: {message}"
         super().__init__(self.message)
+
+
+class TimeoutError(Exception):
+    def __init__(self, msg_id, message):
+        self.msg_id = msg_id
+        if msg_id in timeout_erros:
+            self.message = timeout_erros[to_result_tag]
+        else:
+            self.message = f"Eu tentei realizar meu trabalho mas eu recebi essa mensagem aí da twitch: {message}"
+        super().__init__(self.message)
+
+
+async def remove_timeout(timeout: "Timeout"):
+    async with event_lock:
+        await bot_client.get_channel("mitsuaky").send(timeout.untimeout_command)
+        await event_lock.wait()
+        if to_result_tag == "untimeout_success":
+            return True
+        else:
+            raise UntimeoutError(to_result_tag, to_result_msg)
 
 
 async def give_timeout(timeout: "Timeout"):
@@ -132,7 +156,13 @@ async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motiv
                 empherical=False,
             )
         # TODO: Enviar o comando de revoke
-        await to.revoke(revoker=ctx.member.user.username, reason=motivo)
+        try:
+            await to.revoke(revoker=ctx.member.user.username, reason=motivo)
+        except UntimeoutError as e:
+            return DiscordResponse(
+                content=e.message,
+                empherical=False,
+            )
         await timer.restart_timer()
         #TODO: Log
         return DiscordResponse(

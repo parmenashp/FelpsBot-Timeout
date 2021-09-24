@@ -101,3 +101,7 @@ class Timeout():
     @property
     def timeout_command(self):
         return f"/timeout {self.username} {self.next_timeout_seconds} s"
+
+    @property
+    def untimeout_command(self):
+        return f"/untimeout {self.username}"
