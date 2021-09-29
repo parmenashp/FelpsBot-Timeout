@@ -71,7 +71,7 @@ class Timeout():
 
     async def update_last_timeout(self):
         """Atualiza o registro do último timeout realizado para esse caso"""
-        self.last_timeout = datetime.utcnow()
+        self.last_timeout = datetime.now()
         if self._id:
             await self.db.update_one({'_id': self._id}, {'$set': {'last_timeout': self.last_timeout}})
 
