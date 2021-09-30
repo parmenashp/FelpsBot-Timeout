@@ -73,13 +73,13 @@ class Timeout():
         """Atualiza o registro do último timeout realizado para esse caso"""
         self.last_timeout = datetime.now()
         if self._id:
-            await self.db.update_one({'_id': self._id}, {'$set': {'last_timeout': self.last_timeout}})
+            await self.db.collection.update_one({'_id': self._id}, {'$set': {'last_timeout': self.last_timeout}})
 
     async def insert(self):
         """Enfia no banco de dados"""
         if self._id:
             return False
-        result = await self.db.insert_timeout(self._to_document())
+        result = await self.db.insert_timeout(self)
         self._id = result.inserted_id
         return result
 
@@ -96,11 +96,13 @@ class Timeout():
     @property
     def next_timeout_time(self):
         """Retorna o datetime para o próximo timeout"""
-        return self.last_timeout + timedelta(seconds=self.next_timeout_seconds)
+        if self.last_timeout:
+            return self.last_timeout + timedelta(seconds=self.next_timeout_seconds)
+        return self.created_at + timedelta(seconds=self.next_timeout_seconds)
 
     @property
     def timeout_command(self):
-        return f"/timeout {self.username} {self.next_timeout_seconds} s"
+        return f"/timeout {self.username} {self.next_timeout_seconds} {self.reason}"
 
     @property
     def untimeout_command(self):
