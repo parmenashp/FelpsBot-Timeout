@@ -1,23 +1,26 @@
-
 import asyncio
 from datetime import timedelta
-from models.timer import TimeoutTimer
-from models.embeds import LookupResponse
+import logging
 
 import humanize
 import motor.motor_asyncio
-import twitchio
 import pymongo
+import twitchio
+from twitchio.ext.eventsub import models
 import uvicorn
 from dispike import Dispike
 from dispike.models import IncomingDiscordInteraction
 from dispike.response import DiscordResponse
+from twitchio.ext.eventsub.server import EventSubClient
 
+import configs
 import keys
-from models.db import DataBase
-from models.timeout import Timeout
-from utils.time import ShortTime, BadArgument
 from models.commands import commands
+from models.db import DataBase
+from models.embeds import DiscordLogger, LookupResponse
+from models.timeout import Timeout
+from models.timer import TimeoutTimer
+from utils.time import BadArgument, ShortTime
 
 humanize.i18n.activate("pt_BR")
 
@@ -31,6 +34,17 @@ bot_client = twitchio.Client(
     token=keys.twitch["token"],
     client_secret=keys.twitch["client_secret"],
     initial_channels=["mitsuaky"]
+)
+
+api_client = twitchio.Client.from_client_credentials(
+    client_id=keys.twitch["client_id"],
+    client_secret=keys.twitch["client_secret"]
+)
+
+eventsub_client = EventSubClient(
+    api_client,
+    webhook_secret='cucucuasfdasfd55cu3',
+    callback_route='https://5204-177-93-252-26.ngrok.io/callback'
 )
 
 client = motor.motor_asyncio.AsyncIOMotorClient(
@@ -67,6 +81,7 @@ class UntimeoutError(Exception):
 class TimeoutError(Exception):
     def __init__(self, msg_id, message):
         self.msg_id = msg_id
+        self.orignal_message = message
         if msg_id in timeout_erros:
             self.message = timeout_erros[to_result_tag]
         else:
@@ -94,11 +109,15 @@ async def give_timeout(timeout: "Timeout"):
             raise TimeoutError(to_result_tag, to_result_msg)
 
 
-async def on_timeout_timer_end(timeout: "Timeout"):
-    await bot_client.get_channel("mitsuaky").send(timeout.timeout_command)
-    #TODO: Log
+async def on_timeout_timer_end(timeout: "Timeout"):  # Chamado pelo timer toda vez que chega a hora de ter um timeout.
+    try:
+        await give_timeout(timeout)
+    except TimeoutError as e:
+        text = f"Não consegui renovar o timeout do usuário {timeout.username}. Resposta da Twitch: {e.orignal_message}"
+        return await dlogger.error(text)
 
-timer = TimeoutTimer(db, timeout_callback=on_timeout_timer_end())
+    await timeout.update_last_timeout()
+    await dlogger.renew_timeout(timeout)
 
 
 @bot.interaction.on("timeout")
@@ -134,7 +153,8 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
         end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
         await to.insert()
         await timer.unlock_timer()
-        #TODO: Log
+        await dlogger.timeout(to)
+
         return DiscordResponse(
             content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",
             empherical=False,
@@ -155,16 +175,17 @@ async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motiv
                 content=f"O usuário {username} não tem nenhum timeout ativo.",
                 empherical=False,
             )
-        # TODO: Enviar o comando de revoke
         try:
+            # Possível bug: O timeout ser removido mas ocorrer um erro quando for mudar no banco de dados.
+            await remove_timeout(to)
             await to.revoke(revoker=ctx.member.user.username, reason=motivo)
+            await timer.restart_timer()
+            await dlogger.revoke(to)
         except UntimeoutError as e:
             return DiscordResponse(
                 content=e.message,
                 empherical=False,
             )
-        await timer.restart_timer()
-        #TODO: Log
         return DiscordResponse(
             content=f"O timeout do usuário {username} foi removido com sucesso!",
             empherical=False,
@@ -179,7 +200,6 @@ async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motiv
 @bot.interaction.on("lookup")
 async def handle_lookup(ctx: IncomingDiscordInteraction, username: str) -> DiscordResponse:
     try:
-        username = username.lower()
         tos = await db.get_user_timeouts(username)
         return LookupResponse(username, tos)
 
@@ -194,38 +214,101 @@ async def handle_lookup(ctx: IncomingDiscordInteraction, username: str) -> Disco
 async def event_raw_data(data):
     global to_result_tag
     global to_result_msg
-    print(data)
+    async with event_lock:
+        print(data)
 
-    groups = data.split()
-    try:
-        if groups[2] != "NOTICE":
-            return
-    except IndexError:
-        return
-
-    prebadge = groups[0].split(";")
-    badges = {}
-
-    for badge in prebadge:
-        badge = badge.split("=")
-
+        groups = data.split()
         try:
-            badges[badge[0]] = badge[1]
+            if groups[2] != "NOTICE":
+                return
         except IndexError:
-            pass
-        to_result_tag = badges['@msg-id']
-        to_result_msg = " ".join(groups[4:]).lstrip(":")
-        # libera a condição no give_timeout()
-        event_lock.notify()
+            return
 
+        prebadge = groups[0].split(";")
+        badges = {}
+
+        for badge in prebadge:
+            badge = badge.split("=")
+
+            try:
+                badges[badge[0]] = badge[1]
+            except IndexError:
+                pass
+            to_result_tag = badges['@msg-id']
+            to_result_msg = " ".join(groups[4:]).lstrip(":")
+            # libera a condição no give_timeout() ou remove_timeout()
+            event_lock.notify()
+
+
+async def event_eventsub_notification_stream_start(data):
+    fetched_data: list[twitchio.models.Stream] = await api_client.fetch_streams(user_ids=[configs.FELPS_TWITCH_ID])
+    if fetched_data:
+        await dlogger.stream_start(fetched_data[0].title)
+
+
+async def event_eventsub_notification_stream_end(data):
+    await dlogger.stream_end()
+
+
+async def setup():
+    bot_client.add_event(event_eventsub_notification_stream_start)
+    bot_client.add_event(event_eventsub_notification_stream_end)
+    await dlogger.setup()
+    await dlogger.info("Iniciando bot")
+
+    subscriptions = await eventsub_client.get_subscriptions()
+    sub_stream_online = False
+    sub_stream_offline = False
+
+    for subscription in subscriptions:
+        if (subscription.status != "enabled") or (subscription.transport.callback != eventsub_client.route) \
+                or (subscription.condition != {'broadcaster_user_id': configs.FELPS_TWITCH_ID}):
+            continue
+            # await eventsub_client._http.delete_subscription(subscription)
+        if subscription.type == "stream.online":
+            sub_stream_online = True
+        if subscription.type == "stream.offline":
+            sub_stream_offline = True
+
+    if not sub_stream_online:
+        await eventsub_client.subscribe_channel_stream_start(configs.FELPS_TWITCH_ID)
+        sub_stream_online = True
+    if not sub_stream_offline:
+        await eventsub_client.subscribe_channel_stream_end(configs.FELPS_TWITCH_ID)
+        sub_stream_offline = True
+
+    # await eventsub_client.listen(host="localhost", port=8081)
 
 if __name__ == "__main__":
-    event_lock = asyncio.Condition()
+    sh = logging.StreamHandler()
+    sh.setLevel(logging.DEBUG)
+    sh.setFormatter(
+        logging.Formatter(
+            "[%(asctime)s] %(name)s | %(filename)s - %(levelname)s - %(message)s"
+        )
+    )
+    logging.basicConfig(level=logging.DEBUG, handlers=[sh])
+    logger = logging.getLogger('felpstimeout.main')
 
+    logger.info("Iniciando bot.")
+
+    event_lock = asyncio.Condition()
     server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
+    dlogger = DiscordLogger(configs.WEBHOOK_URL)
+    timer = TimeoutTimer(db, timeout_callback=on_timeout_timer_end)
     # for command in commands:
     #     bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
 
+    async def run():
+        try:
+            await setup()
+            await bot_client.connect()
+            await timer.start()
+            await server.serve()
+
+            await dlogger.info("Bot desligado")
+        except Exception as e:
+            await dlogger.critical("Ocorreu um erro que me impossibilita de continuar funcionando.", e)
+
     loop = asyncio.get_event_loop()
-    loop.create_task(bot_client.connect())
-    loop.run_until_complete(server.serve())
+    loop.run_until_complete(run())
