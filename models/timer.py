@@ -18,7 +18,6 @@ class TimeoutTimer():
         self._have_active = asyncio.Event()
 
     async def start(self):
-        await asyncio.sleep(10)
         self._task = self.loop.create_task(self.dispatch_timers())
 
     async def wait_for_active_timers(self):
@@ -68,3 +67,6 @@ class TimeoutTimer():
         self._task.cancel()
         self._task = self.loop.create_task(self.dispatch_timers())
         logger.debug("Timer resetado")
+
+
+# TODO fazer outros timer pra quando acabar o timeout

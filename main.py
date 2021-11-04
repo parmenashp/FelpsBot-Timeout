@@ -1,12 +1,12 @@
+import argparse
 import asyncio
-from datetime import timedelta
 import logging
+import sys
 
 import humanize
 import motor.motor_asyncio
 import pymongo
 import twitchio
-from twitchio.ext.eventsub import models
 import uvicorn
 from dispike import Dispike
 from dispike.models import IncomingDiscordInteraction
@@ -17,7 +17,7 @@ import configs
 import keys
 from models.commands import commands
 from models.db import DataBase
-from models.embeds import DiscordLogger, LookupResponse
+from models.embeds import DiscordLogger, LookupResponse, TimeoutsResponse
 from models.timeout import Timeout
 from models.timer import TimeoutTimer
 from utils.time import BadArgument, ShortTime
@@ -64,6 +64,11 @@ untimeout_erros = {
     "untimeout_banned": "Esse usuário está banido permanentemente, não consigo remover o timeout"
 }
 
+whisper_erros = {
+    "whisper_restricted_recipient": ""
+}
+
+
 to_result_msg = None
 to_result_tag = None
 
@@ -89,6 +94,36 @@ class TimeoutError(Exception):
         super().__init__(self.message)
 
 
+class WhisperError(Exception):
+    def __init__(self, msg_id, message):
+        self.msg_id = msg_id
+        self.message = message
+        super().__init__(self.message)
+
+
+async def send_whisper(timeout: "Timeout"):
+    async with event_lock:
+        msg = (
+            f"Olá, {timeout.username}. Você quebrou as regras do chat do Felps e recebeu uma punição severa.",
+            " No lugar de um banimento, resolvemos te dar um tempo de espera (timeout) "
+            f"extendido de {humanize.naturaldelta(timeout.finish_at)}.",
+            " Você irá receber suspensões até que o tempo total seja atingido. ",
+            "Caso acredite que seja um engano, ou deseja que um moderador faça uma revisão ",
+            f"da suspensão, recorra ao seguinte formulário: {configs.LINK_FORMULARIO}"
+        )
+        users: list[twitchio.User] = await bot_client.fetch_users(names=[timeout.username])
+        await users[0].channel.whisper({msg})
+
+        # Caso o comando de sussuro funcione, a twitch não devolve um NOTICE, deixando a Condição do event_lock travado
+        # Então esperamos 2 segundos para ver se a twitch irá devolver algum erro, caso contrário, podemos supor que funcionou.
+        try:
+            await asyncio.wait_for(event_lock.wait(), 2)
+            logger.debug(f"Tag recebida pela twitch no send_whisper: {to_result_tag}")
+            raise WhisperError(to_result_tag, to_result_msg)
+        except asyncio.TimeoutError:
+            return True
+
+
 async def remove_timeout(timeout: "Timeout"):
     async with event_lock:
         await bot_client.get_channel("mitsuaky").send(timeout.untimeout_command)
@@ -111,13 +146,14 @@ async def give_timeout(timeout: "Timeout"):
 
 async def on_timeout_timer_end(timeout: "Timeout"):  # Chamado pelo timer toda vez que chega a hora de ter um timeout.
     try:
+        seconds = timeout.next_timeout_seconds
         await give_timeout(timeout)
     except TimeoutError as e:
         text = f"Não consegui renovar o timeout do usuário {timeout.username}. Resposta da Twitch: {e.orignal_message}"
         return await dlogger.error(text)
 
     await timeout.update_last_timeout()
-    await dlogger.renew_timeout(timeout)
+    await dlogger.renew_timeout(timeout, seconds)
 
 
 @bot.interaction.on("timeout")
@@ -149,21 +185,35 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
                 empherical=False,
             )
 
+        whisper = True
+
+        try:
+            await send_whisper(to)
+        except WhisperError as e:
+            whisper = False
+
         natural = humanize.naturaldelta(time.dt)
         end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
         await to.insert()
         await timer.unlock_timer()
         await dlogger.timeout(to)
 
+        content = f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}."
+        if not whisper:
+            content += "\n⚠️ Porém não consegui enviar Whisper para o usuário."
+
         return DiscordResponse(
             content=f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}.",
             empherical=False,
         )
     except pymongo.errors.OperationFailure as e:
+        await dlogger.error("Erro no banco de dados.", e)
         return DiscordResponse(
-            content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
+            content=f"Ocorreu um erro no banco de dados durante a execução desse comando. Código de erro: {e.code}",
             empherical=False,
         )
+    except Exception as e:
+        await dlogger.error("Erro durante a execução do comando `timeout`.", e)
 
 
 @bot.interaction.on("untimeout")
@@ -191,31 +241,43 @@ async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motiv
             empherical=False,
         )
     except pymongo.errors.OperationFailure as e:
+        await dlogger.error("Erro no banco de dados.", e)
         return DiscordResponse(
-            content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
+            content=f"Ocorreu um erro no banco de dados durante a execução desse comando. Código de erro: {e.code}",
             empherical=False,
         )
+    except Exception as e:
+        await dlogger.error("Erro durante a execução do comando `untimeout`.", e)
 
 
-@bot.interaction.on("lookup")
-async def handle_lookup(ctx: IncomingDiscordInteraction, username: str) -> DiscordResponse:
+@bot.interaction.on("timeouts")
+async def handle_timeouts(ctx: IncomingDiscordInteraction, **kwargs) -> DiscordResponse:
     try:
-        tos = await db.get_user_timeouts(username)
-        return LookupResponse(username, tos)
+        username = kwargs.get('username')
+        if username:
+            tos = await db.get_user_timeouts(username)
+            return LookupResponse(username, tos)
+
+        else:
+            tos = await db.get_active_timeouts()
+            return TimeoutsResponse(tos)
 
     except pymongo.errors.OperationFailure as e:
+        await dlogger.error("Erro no banco de dados.", e)
         return DiscordResponse(
-            content=f"Ocorreu um erro durante a execução desse comando. Código de erro: {e.code}",
+            content=f"Ocorreu um erro no banco de dados durante a execução desse comando. Código de erro: {e.code}",
             empherical=False,
         )
+    except Exception as e:
+        await dlogger.error("Erro durante a execução do comando `timeouts`.", e)
 
 
 @bot_client.event()
-async def event_raw_data(data):
+async def event_raw_data(data):  # Função chamada toda vez que algo é recebido pelo IRC da Twitch
     global to_result_tag
     global to_result_msg
     async with event_lock:
-        print(data)
+        # print(data)
 
         groups = data.split()
         try:
@@ -240,21 +302,27 @@ async def event_raw_data(data):
             event_lock.notify()
 
 
-async def event_eventsub_notification_stream_start(data):
+@bot_client.event()
+async def event_ready():
+    logger.info("IRC conectado, iniciando timer.")
+    await timer.start()
+
+
+async def event_eventsub_notification_stream_start(data):  # Função chamada toda vez que abre stream
     fetched_data: list[twitchio.models.Stream] = await api_client.fetch_streams(user_ids=[configs.FELPS_TWITCH_ID])
     if fetched_data:
         await dlogger.stream_start(fetched_data[0].title)
 
 
-async def event_eventsub_notification_stream_end(data):
+async def event_eventsub_notification_stream_end(data):  # Função chamada toda vez que fecha stream
     await dlogger.stream_end()
 
 
 async def setup():
-    bot_client.add_event(event_eventsub_notification_stream_start)
-    bot_client.add_event(event_eventsub_notification_stream_end)
     await dlogger.setup()
     await dlogger.info("Iniciando bot")
+    bot_client.add_event(event_eventsub_notification_stream_start)
+    bot_client.add_event(event_eventsub_notification_stream_end)
 
     subscriptions = await eventsub_client.get_subscriptions()
     sub_stream_online = False
@@ -277,18 +345,38 @@ async def setup():
         await eventsub_client.subscribe_channel_stream_end(configs.FELPS_TWITCH_ID)
         sub_stream_offline = True
 
-    # await eventsub_client.listen(host="localhost", port=8081)
+    await eventsub_client.listen(host="localhost", port=8081)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-rc", "--register_commands", action="store_true",
+                        help="registra/atualiza os comandos no discord")
+    parser.add_argument("-v", "--verbose", action="store_true",
+                        help="aumenta a verbosidade do código (debug)")
+    args = parser.parse_args()
+
+    # if not args.verbose:  # fix debug trash from twitchio
+    #     loguru.logger.remove()
+    #     loguru.logger.add(sys.stderr, level="INFO")
+
     sh = logging.StreamHandler()
-    sh.setLevel(logging.DEBUG)
     sh.setFormatter(
         logging.Formatter(
-            "[%(asctime)s] %(name)s | %(filename)s - %(levelname)s - %(message)s"
+            "[%(asctime)s] %(levelname)s | %(name)s - %(message)s"
         )
     )
-    logging.basicConfig(level=logging.DEBUG, handlers=[sh])
+    logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, handlers=[sh])
     logger = logging.getLogger('felpstimeout.main')
+
+    if args.register_commands:
+        try:
+            for command in commands:
+                bot.register(command=command, guild_only=True, guild_to_target=configs.GUILD_ID)
+                logger.debug(f'Registrado o comando {command.name} para a guild {configs.GUILD_ID}')
+            logger.info('Todos os comandos foram registrados com sucesso.')
+        except Exception:  # Não sei qual erro que dá quando atinge o limite
+            logger.exception("Erro ao tentar registrar os comandos")
+        sys.exit()
 
     logger.info("Iniciando bot.")
 
@@ -296,14 +384,11 @@ if __name__ == "__main__":
     server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
     dlogger = DiscordLogger(configs.WEBHOOK_URL)
     timer = TimeoutTimer(db, timeout_callback=on_timeout_timer_end)
-    # for command in commands:
-    #     bot.register(command=command, guild_only=True, guild_to_target=296214474791190529)
 
     async def run():
         try:
             await setup()
             await bot_client.connect()
-            await timer.start()
             await server.serve()
 
             await dlogger.info("Bot desligado")
