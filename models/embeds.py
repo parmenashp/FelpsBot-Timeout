@@ -5,8 +5,10 @@ from discord.webhook import AsyncWebhookAdapter, Webhook
 from dispike.helper import Embed
 from typing import List, TYPE_CHECKING, Optional, Union
 from datetime import datetime
+import humanize
 
 from dispike.response import DiscordResponse
+from utils.generic import to_codeblock
 from utils.time import discord_time, friendly_time
 from aiohttp.client import ClientSession
 
@@ -24,15 +26,39 @@ YELLOW = 0x0d000
 LIGHT_BLUE = 0x2ea4ff
 
 
+class TimeoutsResponse(DiscordResponse):
+
+    def __init__(self, timeouts: Optional["Timeout"] = None) -> None:
+        if not timeouts:
+            super().__init__(content=f"Atualmente não existe nenhum timeout ativo pelo bot.")
+            return
+
+        timeouts.sort(key=lambda x: x.created_at)
+        old_size = len(timeouts)
+        _big = old_size > 15
+        if _big:
+            timeouts = timeouts[:15]
+
+        _ = friendly_time
+        fmt = "\n".join([
+            f"► {to.username} • Mod: {_(to.moderator)} • Criado: {_(to.created_at)} • Até: {_(to.finish_at)} • Último Timeout: {_(to.last_timeout)}"
+            for to in timeouts
+        ])
+        content = f"Total de timeouts ativos: {len(timeouts)}\n{fmt}" + f"\n...e mais {old_size-15} timeouts." if _big else ""
+        return super().__init__(
+            content=to_codeblock(content)
+        )
+
+
 class LookupResponse(DiscordResponse):
 
     def __init__(self, username, timeouts: Optional["Timeout"] = None) -> None:
         self.timeouts = timeouts
-        self.timeouts.sort(key=lambda x: x.finish_at, reverse=True)
+        self.timeouts.sort(key=lambda x: x.created_at)
         _embeds = []
         for to in self.timeouts:
             _user = to.username
-            color = ROSELHO if to.finish_at > datetime.now() or to.revoked else GRAY
+            color = ROSELHO if to.finish_at > datetime.now() and not to.revoked else GRAY
             embed = Embed(color=color)
             embed.title = f"Motivo: {to.reason}"
             embed.set_author(name=f"Mod: {to.moderator}")
@@ -43,7 +69,7 @@ class LookupResponse(DiscordResponse):
             if len(_embeds) > 1:
                 content = f"Encontrei um total de {len(self.timeouts)} timeouts registrados para **{_user}**"
             else:
-                content = f"Encontrei um total de {len(self.timeouts)} timeout registrado para **{_user}**"
+                content = f"Encontrei um total de 1 timeout registrado para **{_user}**"
             super().__init__(
                 content=content,
                 embeds=_embeds
@@ -87,13 +113,14 @@ class DiscordLogger():
         embed.add_field(name="Até", value=discord_time(timeout.finish_at), inline=False)
         await self.webhook.send(embed=embed)
 
-    async def renew_timeout(self, timeout: "Timeout"):
+    async def renew_timeout(self, timeout: "Timeout", seconds: int):
         embed = Embed(color=LIGHT_BLUE, title="Renovação de Timeout")
         embed.add_field(name="Usuário", value=timeout.username)
         embed.add_field(name="Mod", value=timeout.moderator)
         embed.add_field(name="Motivo", value=timeout.reason, inline=False)
-        embed.add_field(name="De:", value=discord_time(timeout.created_at), inline=False)
+        embed.add_field(name="De", value=discord_time(timeout.created_at), inline=False)
         embed.add_field(name="Até", value=discord_time(timeout.finish_at), inline=False)
+        embed.add_field(name="Timeout dado", value=humanize.naturaldelta(seconds), inline=False)
         await self.webhook.send(embed=embed)
 
     async def untimeout(self, timeout: "Timeout"):
