@@ -5,7 +5,7 @@ import re
 
 def friendly_time(datetime: datetime.datetime) -> str:
     """Retorna o tempo no formato \"dd/mm/yyyy ás hh/mm/ss\""""
-    return datetime.strftime("%d/%m/%Y ás %H:%M:%S")
+    return datetime.strftime("%d/%m/%Y às %H:%M:%S")
 
 
 def discord_time(datetime: datetime.datetime, styles: str = None) -> str:
