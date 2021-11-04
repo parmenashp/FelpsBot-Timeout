@@ -21,7 +21,7 @@ class DataBase():
             "finish_at": {"$gte": datetime.now()},
             "revoked": False
         }
-        cursor = self.collection.find(query).sort("last_timeout", 1)
+        cursor = self.collection.find(query).sort("created_at", 1)
         result = []
         for timeout in await cursor.to_list(None):
             result.append(Timeout.from_database(self, timeout))
