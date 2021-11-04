@@ -65,13 +65,13 @@ class Timeout():
             return False
         self.revoker = revoker.lower()
         self.revoke_reason = reason
-        self.revoked_at = datetime.now()
+        self.revoked_at = datetime.utcnow()
         self.revoked = True
         return await self.db.revoke_timeout(self)
 
     async def update_last_timeout(self):
         """Atualiza o registro do último timeout realizado para esse caso"""
-        self.last_timeout = datetime.now()
+        self.last_timeout = datetime.utcnow()
         if self._id:
             await self.db.collection.update_one({'_id': self._id}, {'$set': {'last_timeout': self.last_timeout}})
 
@@ -86,7 +86,7 @@ class Timeout():
     @property
     def next_timeout_seconds(self):
         """Retorna o total de segundos para o próximo timeout"""
-        now = datetime.now()
+        now = datetime.utcnow()
         delta = (self.finish_at - now).total_seconds()
         # Tirando precisão decimal
         delta = int(delta)

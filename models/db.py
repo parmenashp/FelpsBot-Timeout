@@ -1,15 +1,16 @@
-import asyncio
 from motor.motor_asyncio import AsyncIOMotorCollection
-from datetime import datetime, timedelta
-from typing import List, Optional, Union, Type
+from datetime import datetime
+from typing import List, Union, Type
 from models.timeout import Timeout
 from pymongo.results import InsertOneResult
+from bson.codec_options import CodecOptions
 
 
 class DataBase():
 
     def __init__(self, collection: AsyncIOMotorCollection):
-        self.collection = collection
+        # Tells mongo to send aware datetimes
+        self.collection = collection.with_options(codec_options=CodecOptions(tz_aware=True))
 
     async def insert_timeout(self, timeout: Type["Timeout"]) -> Type["InsertOneResult"]:
         return await self.collection.insert_one(timeout._to_document())
@@ -18,7 +19,7 @@ class DataBase():
         """Retorna uma lista de `Timeout` com todos os timeouts ativos.
         Se não encontrar, retorna `None`"""
         query = {
-            "finish_at": {"$gte": datetime.now()},
+            "finish_at": {"$gte": datetime.utcnow()},
             "revoked": False
         }
         cursor = self.collection.find(query).sort("created_at", 1)
@@ -30,7 +31,7 @@ class DataBase():
 
     async def get_next_active_timeout(self):
         query = {
-            "finish_at": {"$gte": datetime.now()},
+            "finish_at": {"$gte": datetime.utcnow()},
             "revoked": False
         }
         cursor = self.collection.find(query).sort("last_timeout", 1)
@@ -69,8 +70,8 @@ class DataBase():
         """Retorna o `Timeout` ativo desse usuário. Se não encontrar, retorna `None`"""
         query = {
             "username": username.lower(),
-            "finish_at": {"$gte": datetime.now()},
+            "finish_at": {"$gte": datetime.utcnow()},
             "revoked": False
         }
-        result = await self.collection.find_one(query)
+        result = await self.collection.find_one(query,)
         return Timeout.from_database(self, result) if result else None

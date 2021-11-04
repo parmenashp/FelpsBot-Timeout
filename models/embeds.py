@@ -3,7 +3,7 @@ import traceback
 from discord import File
 from discord.webhook import AsyncWebhookAdapter, Webhook
 from dispike.helper import Embed
-from typing import List, TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, Optional
 from datetime import datetime
 import humanize
 
@@ -58,7 +58,7 @@ class LookupResponse(DiscordResponse):
         _embeds = []
         for to in self.timeouts:
             _user = to.username
-            color = ROSELHO if to.finish_at > datetime.now() and not to.revoked else GRAY
+            color = ROSELHO if to.finish_at > datetime.utcnow() and not to.revoked else GRAY
             embed = Embed(color=color)
             embed.title = f"Motivo: {to.reason}"
             embed.set_author(name=f"Mod: {to.moderator}")
@@ -120,7 +120,7 @@ class DiscordLogger():
         embed.add_field(name="Motivo", value=timeout.reason, inline=False)
         embed.add_field(name="De", value=discord_time(timeout.created_at), inline=False)
         embed.add_field(name="Até", value=discord_time(timeout.finish_at), inline=False)
-        embed.add_field(name="Timeout dado", value=humanize.naturaldelta(seconds), inline=False)
+        embed.add_field(name="Timeout dado", value=humanize.naturaldelta(seconds, when=datetime.utcnow()), inline=False)
         await self.webhook.send(embed=embed)
 
     async def untimeout(self, timeout: "Timeout"):

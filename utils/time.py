@@ -1,11 +1,14 @@
 import datetime
 from dateutil.relativedelta import relativedelta
 import re
+import pytz
+
+fuso = pytz.timezone("America/Sao_Paulo")
 
 
 def friendly_time(datetime: datetime.datetime) -> str:
-    """Retorna o tempo no formato \"dd/mm/yyyy ás hh/mm/ss\""""
-    return datetime.strftime("%d/%m/%Y às %H:%M:%S")
+    """Retorna o tempo no formato \"dd/mm/yyyy às hh/mm/ss\""""
+    return datetime.astimezone(fuso).strftime("%d/%m/%Y às %H:%M:%S")
 
 
 def discord_time(datetime: datetime.datetime, styles: str = None) -> str:
@@ -34,6 +37,6 @@ class ShortTime:
             raise BadArgument("a data fornecida é inválida")
 
         data = {k: int(v) for k, v in match.groupdict(default=0).items()}
-        now = now or datetime.datetime.now()
+        now = now or datetime.datetime.utcnow()
         self.td = relativedelta(**data)
         self.dt: datetime.datetime = now + self.td

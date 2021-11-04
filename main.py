@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+from datetime import datetime
 import logging
 import sys
 
@@ -104,10 +105,10 @@ class WhisperError(Exception):
 async def send_whisper(timeout: "Timeout"):
     async with event_lock:
         msg = (
-            f"Olá, {timeout.username}. Você quebrou as regras do chat do Felps e recebeu uma punição severa.",
-            " No lugar de um banimento, resolvemos te dar um tempo de espera (timeout) "
-            f"extendido de {humanize.naturaldelta(timeout.finish_at)}.",
-            " Você irá receber suspensões até que o tempo total seja atingido. ",
+            f"Olá, {timeout.username}. Você quebrou as regras do chat do Felps e recebeu uma punição severa. ",
+            "No lugar de um banimento, resolvemos te dar um tempo de espera (timeout) "
+            f"extendido de {humanize.naturaldelta(timeout.finish_at, when=datetime.utcnow())}. ",
+            "Você irá receber suspensões até que o tempo total seja atingido. ",
             "Caso acredite que seja um engano, ou deseja que um moderador faça uma revisão ",
             f"da suspensão, recorra ao seguinte formulário: {configs.LINK_FORMULARIO}"
         )
@@ -192,7 +193,7 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
         except WhisperError as e:
             whisper = False
 
-        natural = humanize.naturaldelta(time.dt)
+        natural = humanize.naturaldelta(time.dt, when=datetime.utcnow())
         end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
         await to.insert()
         await timer.unlock_timer()
