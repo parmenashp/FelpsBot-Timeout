@@ -2,7 +2,7 @@
 name = "felpsbot-timeout"
 version = "0.1.0"
 description = "Um bot utilitário para auxiliar os espadinhas do Felps na Twitch"
-authors = ["Mitsuaky"]
+authors = ["Mitsuaky <parmenashp@gmail.com>"]
 license = "GPL-2.0-only"
 
 [tool.poetry.dependencies]
