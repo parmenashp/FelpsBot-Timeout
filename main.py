@@ -9,10 +9,8 @@ import motor.motor_asyncio
 import pymongo
 import twitchio
 import uvicorn
-from dispike import Dispike
-from dispike.models import IncomingDiscordInteraction
-from dispike.response import DiscordResponse
-from twitchio.ext.eventsub.server import EventSubClient
+from dispike import Dispike, IncomingDiscordSlashInteraction, DiscordResponse
+from twitchio.ext.eventsub import EventSubClient
 
 import configs
 import keys
@@ -157,8 +155,8 @@ async def on_timeout_timer_end(timeout: "Timeout"):  # Chamado pelo timer toda v
     await dlogger.renew_timeout(timeout, seconds)
 
 
-@bot.interaction.on("timeout")
-async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: str, motivo: str) -> DiscordResponse:
+@bot.on("timeout")
+async def handle_timeout(ctx: IncomingDiscordSlashInteraction, username: str, tempo: str, motivo: str) -> DiscordResponse:
     try:
         try:
             time = ShortTime(tempo)
@@ -217,8 +215,8 @@ async def handle_timeout(ctx: IncomingDiscordInteraction, username: str, tempo: 
         await dlogger.error("Erro durante a execução do comando `timeout`.", e)
 
 
-@bot.interaction.on("untimeout")
-async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motivo: str) -> DiscordResponse:
+@bot.on("untimeout")
+async def handle_untimeout(ctx: IncomingDiscordSlashInteraction, username: str, motivo: str) -> DiscordResponse:
     try:
         to = await db.get_active_user_timeout(username)
         if not to:
@@ -251,8 +249,8 @@ async def handle_untimeout(ctx: IncomingDiscordInteraction, username: str, motiv
         await dlogger.error("Erro durante a execução do comando `untimeout`.", e)
 
 
-@bot.interaction.on("timeouts")
-async def handle_timeouts(ctx: IncomingDiscordInteraction, **kwargs) -> DiscordResponse:
+@bot.on("timeouts")
+async def handle_timeouts(ctx: IncomingDiscordSlashInteraction, **kwargs) -> DiscordResponse:
     try:
         username = kwargs.get('username')
         if username:
@@ -375,7 +373,7 @@ if __name__ == "__main__":
                 bot.register(command=command, guild_only=True, guild_to_target=configs.GUILD_ID)
                 logger.debug(f'Registrado o comando {command.name} para a guild {configs.GUILD_ID}')
             logger.info('Todos os comandos foram registrados com sucesso.')
-        except Exception:  # Não sei qual erro que dá quando atinge o limite
+        except Exception:
             logger.exception("Erro ao tentar registrar os comandos")
         sys.exit()
 
