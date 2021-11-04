@@ -3,7 +3,7 @@ name = "felpsbot-timeout"
 version = "0.1.0"
 description = "Um bot utilitário para auxiliar os espadinhas do Felps na Twitch"
 authors = ["Mitsuaky <parmenashp@gmail.com>"]
-license = "GPL-2.0-only"
+license = "GPL-3.0-only"
 
 [tool.poetry.dependencies]
 python = "^3.9.1"
