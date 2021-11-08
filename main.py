@@ -102,6 +102,7 @@ class WhisperError(Exception):
 
 async def send_whisper(timeout: "Timeout"):
     async with event_lock:
+        logger.debug(f"Tentando enviar whisper para o usuário {timeout.username}")
         msg = (
             f"Olá, {timeout.username}. Você quebrou as regras do chat do Felps e recebeu uma punição severa. ",
             "No lugar de um banimento, resolvemos te dar um tempo de espera (timeout) "
@@ -117,7 +118,7 @@ async def send_whisper(timeout: "Timeout"):
         # Então esperamos 2 segundos para ver se a twitch irá devolver algum erro, caso contrário, podemos supor que funcionou.
         try:
             await asyncio.wait_for(event_lock.wait(), 2)
-            logger.debug(f"Tag recebida pela twitch no send_whisper: {to_result_tag}")
+            logger.error(f"Erro ao enviar whisper para {timeout.username}. Tag recebida pela twitch no send_whisper: {to_result_tag}")
             raise WhisperError(to_result_tag, to_result_msg)
         except asyncio.TimeoutError:
             return True
@@ -125,21 +126,27 @@ async def send_whisper(timeout: "Timeout"):
 
 async def remove_timeout(timeout: "Timeout"):
     async with event_lock:
+        logger.debug(f"Tentando tirar timeout do usuário {timeout.username}")
         await bot_client.get_channel("mitsuaky").send(timeout.untimeout_command)
         await event_lock.wait()
         if to_result_tag == "untimeout_success":
+            logger.debug(f"Timeout retirado com sucesso do usuário {timeout.username}.")
             return True
         else:
+            logger.error(f"Remove timeout no usuário {timeout.username} falhou. TRT: {to_result_tag} TRM: {to_result_msg}")
             raise UntimeoutError(to_result_tag, to_result_msg)
 
 
 async def give_timeout(timeout: "Timeout"):
     async with event_lock:
+        logger.debug(f"Tentando dar timeout no usuário {timeout.username}")
         await bot_client.get_channel("mitsuaky").send(timeout.timeout_command)
         await event_lock.wait()
         if to_result_tag == "timeout_success":
+            logger.debug(f"Timeout realizado com sucesso no usuário {timeout.username}.")
             return True
         else:
+            logger.error(f"Timeout no usuário {timeout.username} falhou. TRT: {to_result_tag} TRM: {to_result_msg}")
             raise TimeoutError(to_result_tag, to_result_msg)
 
 
@@ -152,7 +159,13 @@ async def on_timeout_timer_end(timeout: "Timeout"):  # Chamado pelo timer toda v
         return await dlogger.error(text)
 
     await timeout.update_last_timeout()
+    logger.info(f"Timeout do usuário {timeout.username} foi renovado por mais {seconds} segundos.")
     await dlogger.renew_timeout(timeout, seconds)
+
+
+async def on_timeout_end(timeout: "Timeout"):  # Chamado pelo timer toda vez que algum timeout chega ao final.
+    logger.info(f"Timeout do usuário {timeout.username} acabou.")
+    await dlogger.timeout_end(timeout)
 
 
 @bot.on("timeout")
@@ -188,13 +201,16 @@ async def handle_timeout(ctx: IncomingDiscordSlashInteraction, username: str, te
 
         try:
             await send_whisper(to)
-        except WhisperError as e:
+        except WhisperError:
             whisper = False
+        except Exception as e:
+            dlogger.error(f"Erro ao tentar enviar whisper para o usuário {username}", e)
+            whisper = True
 
         natural = humanize.naturaldelta(time.dt, when=datetime.utcnow())
         end_time = to.finish_at.strftime("%d/%m/%Y ás %H:%M:%S")
         await to.insert()
-        await timer.unlock_timer()
+        await timer.unlock_timers()
         await dlogger.timeout(to)
 
         content = f"Prontinho! {username} agora ficará de bico calado por {natural}, ou seja, até o dia {end_time}."
@@ -228,7 +244,7 @@ async def handle_untimeout(ctx: IncomingDiscordSlashInteraction, username: str, 
             # Possível bug: O timeout ser removido mas ocorrer um erro quando for mudar no banco de dados.
             await remove_timeout(to)
             await to.revoke(revoker=ctx.member.user.username, reason=motivo)
-            await timer.restart_timer()
+            await timer.restart_timers()
             await dlogger.revoke(to)
         except UntimeoutError as e:
             return DiscordResponse(
@@ -392,6 +408,7 @@ if __name__ == "__main__":
 
             await dlogger.info("Bot desligado")
         except Exception as e:
+            logger.exception("Erro fatal que fudeu a porra toda")
             await dlogger.critical("Ocorreu um erro que me impossibilita de continuar funcionando.", e)
 
     loop = asyncio.get_event_loop()

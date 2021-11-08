@@ -113,6 +113,14 @@ class DiscordLogger():
         embed.add_field(name="Até", value=discord_time(timeout.finish_at), inline=False)
         await self.webhook.send(embed=embed)
 
+    async def timeout_end(self, timeout: "Timeout"):
+        embed = Embed(color=GRAY, title="Fim de Timeout")
+        embed.add_field(name="Usuário", value=timeout.username)
+        embed.add_field(name="Mod", value=timeout.moderator)
+        embed.add_field(name="Motivo", value=timeout.reason, inline=False)
+        embed.add_field(name="Até", value=discord_time(timeout.finish_at), inline=False)
+        await self.webhook.send(embed=embed)
+
     async def renew_timeout(self, timeout: "Timeout", seconds: int):
         embed = Embed(color=LIGHT_BLUE, title="Renovação de Timeout")
         embed.add_field(name="Usuário", value=timeout.username)

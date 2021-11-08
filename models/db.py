@@ -1,5 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorCollection
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Union, Type
 from models.timeout import Timeout
 from pymongo.results import InsertOneResult
@@ -19,7 +19,7 @@ class DataBase():
         """Retorna uma lista de `Timeout` com todos os timeouts ativos.
         Se não encontrar, retorna `None`"""
         query = {
-            "finish_at": {"$gte": datetime.utcnow()},
+            "finish_at": {"$gt": datetime.utcnow()},
             "revoked": False
         }
         cursor = self.collection.find(query).sort("created_at", 1)
@@ -31,10 +31,25 @@ class DataBase():
 
     async def get_next_active_timeout(self):
         query = {
-            "finish_at": {"$gte": datetime.utcnow()},
+            "finish_at": {"$gt": datetime.utcnow()},
             "revoked": False
         }
         cursor = self.collection.find(query).sort("last_timeout", 1)
+        for timeout in await cursor.to_list(None):
+            # Verifica se o prazo final do timeout vai acabar antes do maximo permitido pela twitch baseado no ultimo timeout
+            # Assim só retorna os timeouts que ainda precisam receber renovação
+            if timeout["finish_at"] < (timeout["last_timeout"] + datetime.utcnow() + timedelta(days=14)):
+                continue
+            return Timeout.from_database(self, timeout)
+
+        return None
+
+    async def get_next_ending_timeout(self):
+        query = {
+            "finish_at": {"$gt": datetime.utcnow()},
+            "revoked": False
+        }
+        cursor = self.collection.find(query).sort("finish_at", 1)
         for timeout in await cursor.to_list(1):
             return Timeout.from_database(self, timeout)
 
@@ -70,7 +85,7 @@ class DataBase():
         """Retorna o `Timeout` ativo desse usuário. Se não encontrar, retorna `None`"""
         query = {
             "username": username.lower(),
-            "finish_at": {"$gte": datetime.utcnow()},
+            "finish_at": {"$gt": datetime.utcnow()},
             "revoked": False
         }
         result = await self.collection.find_one(query,)
