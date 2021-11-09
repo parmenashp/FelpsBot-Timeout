@@ -398,7 +398,7 @@ if __name__ == "__main__":
     event_lock = asyncio.Condition()
     server = uvicorn.Server(uvicorn.Config(bot.referenced_application, port=8080))
     dlogger = DiscordLogger(configs.WEBHOOK_URL)
-    timer = TimeoutTimer(db, timeout_callback=on_timeout_timer_end)
+    timer = TimeoutTimer(db, timeout_callback=on_timeout_timer_end, timeout_end_callback=on_timeout_end)
 
     async def run():
         try:
