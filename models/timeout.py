@@ -69,6 +69,7 @@ class Timeout():
         self.revoked = True
         return await self.db.revoke_timeout(self)
 
+    # TODO: Passar essa função para a classe DataBase
     async def update_last_timeout(self):
         """Atualiza o registro do último timeout realizado para esse caso"""
         self.last_timeout = datetime.utcnow()
