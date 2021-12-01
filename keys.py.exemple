@@ -1,0 +1,15 @@
+discord = {
+    "bot_token": "",
+    "client_public_key": "",
+    "application_id": ""
+}
+
+twitch = {
+    "token": "",
+    "client_secret": "",
+    "client_id": ""
+}
+
+mongodb = {
+    "key": ""
+}
