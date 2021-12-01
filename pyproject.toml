@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "felpsbot-timeout"
+version = "0.1.0"
+description = "Um bot utilitário para auxiliar os espadinhas do Felps na Twitch"
+authors = ["Mitsuaky <parmenashp@gmail.com>"]
+license = "GPL-3.0-only"
+
+[tool.poetry.dependencies]
+python = "^3.9.1"
+dispike = "1.0.1-beta.0"
+twitchio = "2.1.1"
+humanize = "3.12.0"
+uvicorn = "0.13.*"
+motor = "2.5.1"
+pytz = "^2021.3"
+"discord.py" = "1.7.3"
+python-dateutil = "2.8.2"
+
+[tool.poetry.dev-dependencies]
+autopep8 = "^1.6.0"
+pytest = "^6.2.5"
+pytest-asyncio = "^0.16.0"
+pytest-mock = "^3.6.1"
+freezegun = "^1.1.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

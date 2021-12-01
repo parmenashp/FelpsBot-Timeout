@@ -1,5 +1,8 @@
-from datetime import datetime
-from models.db import DataBase
+from datetime import datetime, timedelta
+from typing import Union, TYPE_CHECKING, Type
+
+if TYPE_CHECKING:
+    from models.db import DataBase
 
 # seconds
 MAX_TIMEOUT_TIME = 1209600
@@ -7,7 +10,7 @@ MAX_TIMEOUT_TIME = 1209600
 
 class Timeout():
 
-    def __init__(self, db: DataBase, moderator: str, username: str, finish_at: datetime, reason: str):
+    def __init__(self, db: Type["DataBase"], moderator: str, username: str, finish_at: datetime, reason: Union[str, None]):
         self._id = None
         self.db = db
         self.username = username.lower()
@@ -16,28 +19,30 @@ class Timeout():
         self.created_at = datetime.utcnow()
         self.last_timeout = None
         self.finish_at = finish_at
+        self.revoker = None
+        self.revoked_at = None
         self.revoke_reason = None
         self.revoked = False
-        self.revoker = None
 
     @classmethod
-    def from_database(cls, db: DataBase, data):
+    def from_database(cls, db: Type["DataBase"], data):
         """Constrói (e retorna) uma classe com os dados 
         providos pelo banco de dados (pymongo/motor)"""
         # Cria um novo objeto sem chamar o __init__
-        cls.__new__(cls)
-        cls.db = db
-        cls._id = data["_id"]
-        cls.username = data["username"]
-        cls.moderator = data["moderator"]
-        cls.reason = data["reason"]
-        cls.created_at = data["created_at"]
-        cls.last_timeout = data["last_timeout"]
-        cls.finish_at = data["finish_at"]
-        cls.revoke_reason = data["revoke_reason"]
-        cls.revoked = data["revoked"]
-        cls.revoker = data["revoker"]
-        return cls
+        self = cls.__new__(cls)
+        self.db = db
+        self._id = data["_id"]
+        self.username = data["username"]
+        self.moderator = data["moderator"]
+        self.reason = data["reason"]
+        self.created_at = data["created_at"]
+        self.last_timeout = data["last_timeout"]
+        self.finish_at = data["finish_at"]
+        self.revoked_at = data["revoked_at"]
+        self.revoker = data["revoker"]
+        self.revoke_reason = data["revoke_reason"]
+        self.revoked = data["revoked"]
+        return self
 
     def _to_document(self):
         document = {
@@ -47,9 +52,10 @@ class Timeout():
             "created_at": self.created_at,
             "last_timeout": self.last_timeout,
             "finish_at": self.finish_at,
+            "revoked_at": self.revoked_at,
+            "revoker": self.revoker,
             "revoke_reason": self.revoke_reason,
-            "revoked": self.revoked,
-            "revoker": self.revoker
+            "revoked": self.revoked
         }
         return document
 
@@ -58,25 +64,28 @@ class Timeout():
         if not self._id:
             return False
         self.revoker = revoker.lower()
-        self.reason = reason
-        self.revoked = datetime.now()
-        await self.db.revoke_timeout(self)
+        self.revoke_reason = reason
+        self.revoked_at = datetime.utcnow()
+        self.revoked = True
+        return await self.db.revoke_timeout(self)
 
+    # TODO: Passar essa função para a classe DataBase
     async def update_last_timeout(self):
         """Atualiza o registro do último timeout realizado para esse caso"""
         self.last_timeout = datetime.utcnow()
         if self._id:
-            await self.db.update_one({'_id': self._id}, {'$set': {'last_timeout': self.last_timeout}})
+            await self.db.collection.update_one({'_id': self._id}, {'$set': {'last_timeout': self.last_timeout}})
 
     async def insert(self):
         """Enfia no banco de dados"""
         if self._id:
             return False
-        result = await self.db.insert_one(self._to_document())
+        result = await self.db.insert_timeout(self)
         self._id = result.inserted_id
+        return result
 
     @property
-    def next_timeout_time(self):
+    def next_timeout_seconds(self):
         """Retorna o total de segundos para o próximo timeout"""
         now = datetime.utcnow()
         delta = (self.finish_at - now).total_seconds()
@@ -86,5 +95,16 @@ class Timeout():
         return MAX_TIMEOUT_TIME if delta > MAX_TIMEOUT_TIME else delta
 
     @property
+    def next_timeout_time(self):
+        """Retorna o datetime para o próximo timeout"""
+        if self.last_timeout:
+            return self.last_timeout + timedelta(seconds=self.next_timeout_seconds)
+        return self.created_at + timedelta(seconds=self.next_timeout_seconds)
+
+    @property
     def timeout_command(self):
-        return f"/timeout {self.username} {self.next_timeout_time}s"
+        return f"/timeout {self.username} {self.next_timeout_seconds} {self.reason}"
+
+    @property
+    def untimeout_command(self):
+        return f"/untimeout {self.username}"

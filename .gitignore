@@ -1,3 +1,5 @@
 keys.py
+configs.py
 Pipfile
 Pipfile.lock
+__pycache__/
