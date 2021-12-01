@@ -32,7 +32,7 @@ bot = Dispike(
 bot_client = twitchio.Client(
     token=keys.twitch["token"],
     client_secret=keys.twitch["client_secret"],
-    initial_channels=["mitsuaky"]
+    initial_channels=[configs.STREAMER_NAME]
 )
 
 api_client = twitchio.Client.from_client_credentials(
@@ -109,7 +109,7 @@ async def send_whisper(timeout: "Timeout"):
             f"extendido de {humanize.naturaldelta(timeout.finish_at, when=datetime.utcnow())}. ",
             "Você irá receber suspensões até que o tempo total seja atingido. ",
             "Caso acredite que seja um engano, ou deseja que um moderador faça uma revisão ",
-            f"da suspensão, recorra ao seguinte formulário: {configs.LINK_FORMULARIO}"
+            f"da suspensão, recorra ao seguinte formulário: {configs.FORM_LINK}"
         )
         users: list[twitchio.User] = await bot_client.fetch_users(names=[timeout.username])
         await users[0].channel.whisper({msg})
@@ -127,7 +127,7 @@ async def send_whisper(timeout: "Timeout"):
 async def remove_timeout(timeout: "Timeout"):
     async with event_lock:
         logger.debug(f"Tentando tirar timeout do usuário {timeout.username}")
-        await bot_client.get_channel("mitsuaky").send(timeout.untimeout_command)
+        await bot_client.get_channel(configs.STREAMER_NAME).send(timeout.untimeout_command)
         await event_lock.wait()
         if to_result_tag == "untimeout_success":
             logger.debug(f"Timeout retirado com sucesso do usuário {timeout.username}.")
@@ -140,7 +140,7 @@ async def remove_timeout(timeout: "Timeout"):
 async def give_timeout(timeout: "Timeout"):
     async with event_lock:
         logger.debug(f"Tentando dar timeout no usuário {timeout.username}")
-        await bot_client.get_channel("mitsuaky").send(timeout.timeout_command)
+        await bot_client.get_channel(configs.STREAMER_NAME).send(timeout.timeout_command)
         await event_lock.wait()
         if to_result_tag == "timeout_success":
             logger.debug(f"Timeout realizado com sucesso no usuário {timeout.username}.")
@@ -327,7 +327,7 @@ async def event_ready():
 
 
 async def event_eventsub_notification_stream_start(data):  # Função chamada toda vez que abre stream
-    fetched_data: list[twitchio.models.Stream] = await api_client.fetch_streams(user_ids=[configs.FELPS_TWITCH_ID])
+    fetched_data: list[twitchio.models.Stream] = await api_client.fetch_streams(user_ids=[configs.STREAMER_TWITCH_ID])
     if fetched_data:
         await dlogger.stream_start(fetched_data[0].title)
 
@@ -348,7 +348,7 @@ async def setup():
 
     for subscription in subscriptions:
         if (subscription.status != "enabled") or (subscription.transport.callback != eventsub_client.route) \
-                or (subscription.condition != {'broadcaster_user_id': configs.FELPS_TWITCH_ID}):
+                or (subscription.condition != {'broadcaster_user_id': configs.STREAMER_TWITCH_ID}):
             continue
             # await eventsub_client._http.delete_subscription(subscription)
         if subscription.type == "stream.online":
@@ -357,10 +357,10 @@ async def setup():
             sub_stream_offline = True
 
     if not sub_stream_online:
-        await eventsub_client.subscribe_channel_stream_start(configs.FELPS_TWITCH_ID)
+        await eventsub_client.subscribe_channel_stream_start(configs.STREAMER_TWITCH_ID)
         sub_stream_online = True
     if not sub_stream_offline:
-        await eventsub_client.subscribe_channel_stream_end(configs.FELPS_TWITCH_ID)
+        await eventsub_client.subscribe_channel_stream_end(configs.STREAMER_TWITCH_ID)
         sub_stream_offline = True
 
     await eventsub_client.listen(host="localhost", port=8081)

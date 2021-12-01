@@ -1,0 +1,5 @@
+STREAMER_NAME = "<Username Streamer>"
+STREAMER_TWITCH_ID = "<ID Streamer>"
+GUILD_ID = <Discord Guild ID>
+WEBHOOK_URL = "<Webhook from discord>"
+FORM_LINK = "<Form link (short url)>"
