@@ -191,6 +191,7 @@ async def handle_timeout(ctx: IncomingDiscordSlashInteraction, username: str, te
 
         try:
             await give_timeout(to)
+            to.update_last_timeout()
         except TimeoutError as e:
             return DiscordResponse(
                 content=e.message,
@@ -285,6 +286,8 @@ async def handle_timeouts(ctx: IncomingDiscordSlashInteraction, **kwargs) -> Dis
         )
     except Exception as e:
         await dlogger.error("Erro durante a execução do comando `timeouts`.", e)
+
+# TODO: utilizar o wait_for do condition para ver o que foi recebido é oq a coisa quer. Se pá filtrar somente as tags importantes
 
 
 @bot_client.event()
